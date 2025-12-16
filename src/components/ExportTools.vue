@@ -153,7 +153,6 @@ export default {
     const exportFormats = [
       { id: 'css', name: 'CSS Variables', icon: '🎨', description: 'Современные CSS переменные' },
       { id: 'scss', name: 'SCSS Variables', icon: '⚡', description: 'SCSS переменные и миксины' },
-      { id: 'less', name: 'LESS Variables', icon: '📦', description: 'LESS переменные' },
       { id: 'tailwind', name: 'Tailwind Config', icon: '🎯', description: 'Конфигурация Tailwind CSS' },
       { id: 'js', name: 'JavaScript Object', icon: '⚛️', description: 'JS объект для React/Vue' },
       { id: 'json', name: 'JSON', icon: '📄', description: 'Стандартный JSON формат' }
@@ -184,8 +183,6 @@ export default {
           return generateCSSVariables()
         case 'scss':
           return generateSCSSVariables()
-        case 'less':
-          return generateLESSVariables()
         case 'tailwind':
           return generateTailwindConfig()
         case 'js':

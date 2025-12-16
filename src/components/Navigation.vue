@@ -54,7 +54,6 @@ export default {
       localStorage.setItem('theme', newVal ? 'dark' : 'light')
     })
     
-    // Восстановить тему при загрузке
     const savedTheme = localStorage.getItem('theme')
     if (savedTheme === 'dark') {
       isDark.value = true

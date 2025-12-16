@@ -1,311 +1,296 @@
 <template>
-  <div class="generator-view">
-    <h1>Генератор палитр</h1>
+  <div class="export-view">
+    <h1>Экспорт палитр</h1>
     
-    <div class="controls">
-      <div class="control-group">
-        <label>Цветов:</label>
-        <select v-model="colorCount" class="input">
-          <option value="3">3</option>
-          <option value="5">5</option>
-          <option value="7">7</option>
-        </select>
+    <div class="export-content">
+
+
+      <div class="export-area">
+        <ExportTools 
+          :colors="selectedColors"
+          :palette-name="paletteName"
+        />
       </div>
-      
-      <div class="control-group">
-        <label>Тип:</label>
-        <select v-model="paletteType" class="input">
-          <option value="random">Случайная</option>
-          <option value="analogous">Аналогичная</option>
-          <option value="monochromatic">Монохромная</option>
-          <option value="complementary">Комплементарная</option>
-        </select>
-      </div>
-      
-      <div class="control-group">
-        <label>Основной цвет:</label>
-        <input type="color" v-model="baseColor">
-      </div>
-    </div>
-    
-    <div class="actions">
-      <button @click="generate" class="btn generate-btn">
-        🔄 Сгенерировать
-      </button>
-      <button @click="save" class="btn save-btn">
-        💾 Сохранить
-      </button>
-    </div>
-    
-    <div class="palette-display">
-      <div 
-        v-for="(color, index) in colors" 
-        :key="index"
-        class="color-card"
-        :style="{ background: color.value }"
-        @click="copyColor(color.value)"
-      >
-        <div class="color-info" :class="{ light: isLight(color.value) }">
-          {{ formatColor(color.value) }}
-        </div>
-        <button 
-          @click.stop="togglePin(index)"
-          class="pin-btn"
-          :class="{ pinned: color.pinned }"
-        >
-          📌
-        </button>
-      </div>
-    </div>
-    
-    <div class="tools">
-      <PalettePreview :palette="colors" />
-      <ColorAnalyzer />
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
-import PalettePreview from '../components/PalettePreview.vue'
-import ColorAnalyzer from '../components/ColorAnalyzer.vue'
+import { ref, computed, onMounted } from 'vue'
+import ExportTools from '../components/ExportTools.vue'
 import { useColorPalette } from '../composables/useColorPalette'
-import { generateAnalogous, generateMonochromatic, generateComplementary } from '../utils/paletteGenerators'
-import { generateRandomColor } from '../utils/colorUtils'
 
 export default {
-  name: 'GeneratorView',
+  name: 'ExportView',
   components: {
-    PalettePreview,
-    ColorAnalyzer
+    ExportTools
   },
   setup() {
-    const colorCount = ref(5)
-    const paletteType = ref('random')
-    const baseColor = ref('#667eea')
-    const colorFormat = ref('hex')
-    
-    const { colors, pinned, togglePin, saveToStorage } = useColorPalette()
-    
-    const generate = () => {
-      let newColors = []
-      
-      switch(paletteType.value) {
-        case 'analogous':
-          newColors = generateAnalogous(baseColor.value, parseInt(colorCount.value))
-          break
-        case 'monochromatic':
-          newColors = generateMonochromatic(baseColor.value, parseInt(colorCount.value))
-          break
-        case 'complementary':
-          newColors = generateComplementary(baseColor.value, parseInt(colorCount.value))
-          break
-        default:
-          newColors = Array.from({ length: parseInt(colorCount.value) }, () => generateRandomColor())
+    const selectedPalette = ref('current')
+    const savedPalettes = ref([])
+    const { colors: currentColors } = useColorPalette()
+
+    const selectedColors = computed(() => {
+      if (selectedPalette.value === 'current') {
+        return currentColors.value
       }
       
-      colors.value = newColors.map((color, index) => ({
-        value: color,
-        pinned: pinned.has(index)
-      }))
+      const palette = savedPalettes.value.find(p => p.id === selectedPalette.value)
+      if (palette) {
+        return palette.colors.map(color => ({ value: color }))
+      }
       
-      saveToLocalStorage()
-    }
-    
-    const save = () => {
-      const name = prompt('Название палитры:', `Палитра ${new Date().toLocaleDateString()}`)
-      if (name) {
-        saveToStorage(name)
-        alert('Палитра сохранена!')
-      }
-    }
-    
-    const copyColor = async (color) => {
-      try {
-        await navigator.clipboard.writeText(color.toUpperCase())
-        alert(`${color} скопирован!`)
-      } catch {
-        const textarea = document.createElement('textarea')
-        textarea.value = color
-        document.body.appendChild(textarea)
-        textarea.select()
-        document.execCommand('copy')
-        document.body.removeChild(textarea)
-        alert(`${color} скопирован!`)
-      }
-    }
-    
-    const formatColor = (color) => {
-      return colorFormat.value === 'hex' 
-        ? color.toUpperCase()
-        : hexToRgb(color)
-    }
-    
-    const hexToRgb = (hex) => {
-      const r = parseInt(hex.slice(1, 3), 16)
-      const g = parseInt(hex.slice(3, 5), 16)
-      const b = parseInt(hex.slice(5, 7), 16)
-      return `rgb(${r}, ${g}, ${b})`
-    }
-    
-    const isLight = (color) => {
-      const r = parseInt(color.slice(1, 3), 16)
-      const g = parseInt(color.slice(3, 5), 16)
-      const b = parseInt(color.slice(5, 7), 16)
-      const brightness = (r * 299 + g * 587 + b * 114) / 1000
-      return brightness > 128
-    }
-    
-    const saveToLocalStorage = () => {
-      localStorage.setItem('currentPalette', JSON.stringify({
-        colors: colors.value,
-        settings: { colorCount: colorCount.value, paletteType: paletteType.value, baseColor: baseColor.value }
-      }))
-    }
-    
-    onMounted(() => {
-      const saved = JSON.parse(localStorage.getItem('currentPalette'))
-      if (saved) {
-        colors.value = saved.colors
-        colorCount.value = saved.settings.colorCount
-        paletteType.value = saved.settings.paletteType
-        baseColor.value = saved.settings.baseColor
-      } else {
-        generate()
-      }
+      return currentColors.value
     })
-    
+
+    const paletteName = computed(() => {
+      if (selectedPalette.value === 'current') {
+        return 'my-palette'
+      }
+      
+      const palette = savedPalettes.value.find(p => p.id === selectedPalette.value)
+      return palette ? palette.name.replace(/\s+/g, '-').toLowerCase() : 'palette'
+    })
+
+    const loadPalettes = () => {
+      savedPalettes.value = JSON.parse(localStorage.getItem('palettes') || '[]')
+    }
+
+    onMounted(() => {
+      loadPalettes()
+    })
+
     return {
-      colorCount,
-      paletteType,
-      baseColor,
-      colorFormat,
-      colors,
-      generate,
-      save,
-      togglePin,
-      copyColor,
-      formatColor,
-      isLight
+      selectedPalette,
+      savedPalettes,
+      selectedColors,
+      paletteName
     }
   }
 }
 </script>
-
 <style scoped>
-.generator-view {
-  padding: 1rem;
+.export-view {
+  padding: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
-.generator-view h1 {
-  margin-bottom: 1.5rem;
+.export-view h1 {
+  text-align: center;
+  margin-bottom: 10px;
 }
 
-.controls {
+.subtitle {
+  text-align: center;
+  color: #666;
+  margin-bottom: 30px;
+}
+
+.export-controls {
+  display: flex;
+  gap: 30px;
+  margin-bottom: 30px;
+}
+
+.format-selector {
+  flex: 2;
+}
+
+.export-options {
+  flex: 1;
+  min-width: 300px;
+}
+
+.format-selector h3,
+.export-options h3 {
+  margin-bottom: 15px;
+}
+
+.format-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  background: white;
-  padding: 1rem;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 15px;
+}
+
+.format-card {
+  padding: 15px;
+  border: 1px solid #ddd;
   border-radius: 8px;
-  border: 1px solid #e2e8f0;
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
-.control-group {
+.format-card:hover {
+  border-color: #667eea;
+}
+
+.format-card.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+}
+
+.format-icon {
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.format-info h4 {
+  margin: 0 0 5px 0;
+}
+
+.format-info p {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.8;
+}
+
+.options-grid {
+  margin-bottom: 20px;
+}
+
+.option {
+  margin-bottom: 10px;
+}
+
+.option label {
   display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
 }
 
-.input {
-  padding: 0.5rem;
-  border: 1px solid #e2e8f0;
+.palette-selector {
+  margin-top: 20px;
+}
+
+.palette-select {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
   border-radius: 4px;
+  margin-top: 5px;
 }
 
-.actions {
+.export-preview {
+  margin-bottom: 30px;
+}
+
+.preview-header {
   display: flex;
-  gap: 1rem;
-  margin-bottom: 1.5rem;
-  justify-content: center;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.preview-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .btn {
-  padding: 0.75rem 1.5rem;
+  padding: 8px 16px;
   border: none;
-  border-radius: 6px;
+  border-radius: 4px;
   cursor: pointer;
-  font-weight: 600;
 }
 
-.generate-btn {
+.btn-secondary {
+  background: #f0f0f0;
+}
+
+.btn-primary {
   background: #667eea;
   color: white;
 }
 
-.save-btn {
-  background: #edf2f7;
-  color: #4a5568;
-}
-
-.palette-display {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.color-card {
-  height: 120px;
+.code-preview {
+  background: #1e1e1e;
+  color: #f8f8f2;
+  padding: 20px;
   border-radius: 8px;
-  position: relative;
-  overflow: hidden;
-  cursor: pointer;
-  border: 1px solid rgba(0,0,0,0.1);
+  overflow-x: auto;
+  max-height: 400px;
 }
 
-.color-info {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 0.5rem;
-  background: rgba(0,0,0,0.8);
-  color: white;
-  font-family: monospace;
-  font-size: 0.9rem;
+.code-preview pre {
+  margin: 0;
+  font-family: 'Monaco', monospace;
+  font-size: 14px;
 }
 
-.color-info.light {
-  background: rgba(255,255,255,0.9);
-  color: black;
+.export-examples {
+  margin-top: 30px;
 }
 
-.pin-btn {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  background: rgba(255,255,255,0.9);
-  border: none;
-  border-radius: 4px;
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
+.export-examples h3 {
+  margin-bottom: 20px;
 }
 
-.pin-btn.pinned {
-  background: #fbbf24;
-}
-
-.tools {
+.examples-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1rem;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 20px;
+}
+
+.example-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.example-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.example-card h4 {
+  margin: 0 0 10px 0;
+}
+
+.example-card p {
+  margin: 0 0 15px 0;
+  color: #666;
+  font-size: 14px;
+}
+
+.example-code {
+  background: #f5f5f5;
+  padding: 10px;
+  border-radius: 4px;
+  font-family: 'Monaco', monospace;
+  font-size: 12px;
+  text-align: left;
+  overflow-x: auto;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+  .export-controls {
+    flex-direction: column;
+  }
+  
+  .format-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .examples-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 768px) {
-  .tools {
-    grid-template-columns: 1fr;
+  .preview-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .preview-actions {
+    flex-direction: column;
   }
 }
 </style>
