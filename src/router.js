@@ -29,7 +29,7 @@ const routes = [
 ]
 
 const router = createRouter({
-    history: createWebHistory(),
+    history: createWebHistory('/study-frontend_and_backend-5-control-work/'),
     routes
 })
 
