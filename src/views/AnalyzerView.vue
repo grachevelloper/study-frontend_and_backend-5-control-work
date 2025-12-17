@@ -2,7 +2,7 @@
   <div class="analyzer-view">
     <h1>🔍 Анализатор цветов</h1>
     <p class="subtitle">Проверяйте контрастность, доступность и получайте рекомендации</p>
-    
+
     <div class="analyzer-grid">
       <div class="main-analyzer">
         <div class="contrast-checker card">
@@ -19,14 +19,14 @@
               <input v-model="textColor" class="color-value" @input="updateFromInput('text')">
             </div>
           </div>
-          
+
           <div class="contrast-results">
             <div class="result-card" :class="contrastClass">
               <h4>Коэффициент контраста</h4>
               <div class="ratio">{{ contrastRatio.toFixed(2) }}:1</div>
               <div class="level">{{ contrastLevel }}</div>
             </div>
-            
+
             <div class="wcag-compliance">
               <h4>Соответствие WCAG 2.1</h4>
               <div class="compliance-item" :class="{ compliant: meetsAA }">
@@ -43,27 +43,29 @@
               </div>
             </div>
           </div>
-          
+
+          <!-- Блок демонстрации текста с эмуляцией -->
           <div class="contrast-demo">
-            <div 
+            <div
               class="demo-text"
-              :style="{ 
-                backgroundColor: backgroundColor, 
-                color: textColor 
+              :style="{
+                backgroundColor: simulatedBackgroundColor,
+                color: simulatedTextColor
               }"
             >
-              <h4>Пример текста</h4>
+              <h4>Пример текста (эмуляция: {{ activeBlindnessName }})</h4>
               <p>Это пример текста для проверки читаемости. Используйте эту комбинацию для заголовков, основного текста и ссылок.</p>
-              <a href="#" :style="{ color: textColor }">Пример ссылки</a>
+              <a href="#" :style="{ color: simulatedTextColor }">Пример ссылки</a>
             </div>
           </div>
         </div>
-        
+
         <div class="color-blindness card">
           <h3>👁️ Эмуляция цветовой слепоты</h3>
+            <p>Текущий режим: <strong>{{ activeBlindness }} ({{ activeBlindnessName }})</strong></p>
           <div class="blindness-types">
-            <button 
-              v-for="type in blindnessTypes" 
+            <button
+              v-for="type in blindnessTypes"
               :key="type.id"
               @click="activeBlindness = type.id"
               class="blindness-btn"
@@ -72,10 +74,10 @@
               {{ type.icon }} {{ type.name }}
             </button>
           </div>
-          
+
           <div class="blindness-preview">
-            <div 
-              v-for="color in demoColors" 
+            <div
+              v-for="color in simulatedDemoColors"
               :key="color"
               class="color-box"
               :style="{ backgroundColor: color }"
@@ -85,8 +87,9 @@
           </div>
         </div>
       </div>
-      
+
       <div class="sidebar">
+        <!-- Блок рекомендаций (оставлен без изменений) -->
         <div class="recommendations card">
           <h3>💡 Рекомендации</h3>
           <div class="recommendation-list">
@@ -112,7 +115,7 @@
             </div>
           </div>
         </div>
-        
+
         <div class="color-info card">
           <h3>📈 Информация о цветах</h3>
           <div class="color-details">
@@ -133,7 +136,7 @@
               <span>{{ textLuminance.toFixed(3) }}</span>
             </div>
           </div>
-          
+
           <div class="quick-tools">
             <h4>Быстрые инструменты</h4>
             <div class="tool-buttons">
@@ -158,95 +161,194 @@
 import { ref, computed } from 'vue'
 import { getContrastRatio, getLuminance } from '../utils/colorUtils'
 
+function simulateColorBlindness(hexColor, type = 'normal') {
+  // Убираем # если есть и проверяем длину
+  const hex = hexColor.replace('#', '');
+  
+  // Поддерживаем как 6-символьные, так и 3-символьные HEX
+  let r, g, b;
+  
+  if (hex.length === 3) {
+    // Для формата #RGB -> #RRGGBB
+    r = parseInt(hex[0] + hex[0], 16) / 255;
+    g = parseInt(hex[1] + hex[1], 16) / 255;
+    b = parseInt(hex[2] + hex[2], 16) / 255;
+  } else {
+    // Для формата #RRGGBB (берем первые 6 символов)
+    const cleanHex = hex.substring(0, 6);
+    r = parseInt(cleanHex.substring(0, 2), 16) / 255;
+    g = parseInt(cleanHex.substring(2, 4), 16) / 255;
+    b = parseInt(cleanHex.substring(4, 6), 16) / 255;
+  }
+  
+  // Оригинальные матрицы (оставляем как есть)
+  const matrices = {
+    normal: [
+      [1, 0, 0],
+      [0, 1, 0],
+      [0, 0, 1]
+    ],
+    protanopia: [
+      [0.567, 0.433, 0],
+      [0.558, 0.442, 0],
+      [0, 0.242, 0.758]
+    ],
+    deuteranopia: [
+      [0.625, 0.375, 0],
+      [0.7, 0.3, 0],
+      [0, 0.3, 0.7]
+    ],
+    tritanopia: [
+      [0.95, 0.05, 0],
+      [0, 0.433, 0.567],
+      [0, 0.475, 0.525]
+    ],
+    achromatopsia: [
+      [0.299, 0.587, 0.114],
+      [0.299, 0.587, 0.114],
+      [0.299, 0.587, 0.114]
+    ]
+  };
+  
+  const matrix = matrices[type] || matrices.normal;
+  
+  // Применяем преобразование
+  const newR = r * matrix[0][0] + g * matrix[0][1] + b * matrix[0][2];
+  const newG = r * matrix[1][0] + g * matrix[1][1] + b * matrix[1][2];
+  const newB = r * matrix[2][0] + g * matrix[2][1] + b * matrix[2][2];
+  
+  // Обратно в HEX с правильным округлением
+  const toHex = (value) => {
+    const intValue = Math.min(255, Math.max(0, Math.round(value * 255)));
+    const hex = intValue.toString(16).padStart(2, '0');
+    return hex;
+  };
+  
+  return `#${toHex(newR)}${toHex(newG)}${toHex(newB)}`;
+}
+
 export default {
   name: 'AnalyzerView',
-  
+
   setup() {
-    const backgroundColor = ref('#ffffff')
-    const textColor = ref('#000000')
-    const activeBlindness = ref('normal')
-    
+    const backgroundColor = ref('#ffffff');
+    const textColor = ref('#000000');
+    const activeBlindness = ref('normal');
+
     const blindnessTypes = [
       { id: 'normal', name: 'Нормальное', icon: '👁️' },
       { id: 'protanopia', name: 'Протанопия', icon: '🔴' },
       { id: 'deuteranopia', name: 'Дейтеранопия', icon: '🟢' },
       { id: 'tritanopia', name: 'Тританопия', icon: '🔵' },
       { id: 'achromatopsia', name: 'Ахроматопсия', icon: '⚫' }
-    ]
-    
-    const demoColors = ['#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2']
-    
+    ];
+
+    const demoColors = ['#FF6B6B', '#4ECDC4', '#FFD166', '#06D6A0', '#118AB2'];
+
+    const simulatedDemoColors = computed(() => {
+      if (activeBlindness.value === 'normal') {
+        return demoColors;
+      }
+      return demoColors.map(color =>
+        simulateColorBlindness(color, activeBlindness.value)
+      );
+    });
+
+    const simulatedBackgroundColor = computed(() => {
+      if (activeBlindness.value === 'normal') {
+        return backgroundColor.value;
+      }
+      return simulateColorBlindness(backgroundColor.value, activeBlindness.value);
+    });
+
+    const simulatedTextColor = computed(() => {
+      if (activeBlindness.value === 'normal') {
+        return textColor.value;
+      }
+      return simulateColorBlindness(textColor.value, activeBlindness.value);
+    });
+
+    // Для отображения названия активного типа
+    const activeBlindnessName = computed(() => {
+      const type = blindnessTypes.find(t => t.id === activeBlindness.value);
+      return type ? type.name : 'Нормальное';
+    });
+
+    // Остальные вычисляемые свойства (контраст, яркость и т.д.)
     const contrastRatio = computed(() => {
-      return getContrastRatio(backgroundColor.value, textColor.value)
-    })
-    
+      return getContrastRatio(backgroundColor.value, textColor.value);
+    });
+
     const backgroundLuminance = computed(() => {
-      return getLuminance(backgroundColor.value)
-    })
-    
+      return getLuminance(backgroundColor.value);
+    });
+
     const textLuminance = computed(() => {
-      return getLuminance(textColor.value)
-    })
-    
-    const meetsAA = computed(() => contrastRatio.value >= 4.5)
-    const meetsAAA = computed(() => contrastRatio.value >= 7)
-    const meetsLargeAA = computed(() => contrastRatio.value >= 3)
-    
+      return getLuminance(textColor.value);
+    });
+
+    const meetsAA = computed(() => contrastRatio.value >= 4.5);
+    const meetsAAA = computed(() => contrastRatio.value >= 7);
+    const meetsLargeAA = computed(() => contrastRatio.value >= 3);
+
     const contrastLevel = computed(() => {
-      if (contrastRatio.value >= 7) return 'AAA (Отлично)'
-      if (contrastRatio.value >= 4.5) return 'AA (Хорошо)'
-      if (contrastRatio.value >= 3) return 'AA для крупного текста'
-      return 'Недостаточно'
-    })
-    
+      if (contrastRatio.value >= 7) return 'AAA (Отлично)';
+      if (contrastRatio.value >= 4.5) return 'AA (Хорошо)';
+      if (contrastRatio.value >= 3) return 'AA для крупного текста';
+      return 'Недостаточно';
+    });
+
     const contrastClass = computed(() => {
-      if (contrastRatio.value >= 4.5) return 'good'
-      if (contrastRatio.value >= 3) return 'ok'
-      return 'poor'
-    })
-    
+      if (contrastRatio.value >= 4.5) return 'good';
+      if (contrastRatio.value >= 3) return 'ok';
+      return 'poor';
+    });
+
     const isTooBright = computed(() => {
-      return backgroundLuminance.value > 0.8 && contrastRatio.value < 4.5
-    })
-    
+      return backgroundLuminance.value > 0.8 && contrastRatio.value < 4.5;
+    });
+
     const isTooDark = computed(() => {
-      return backgroundLuminance.value < 0.2 && textLuminance.value < 0.2
-    })
-    
+      return backgroundLuminance.value < 0.2 && textLuminance.value < 0.2;
+    });
+
     const swapColors = () => {
-      const temp = backgroundColor.value
-      backgroundColor.value = textColor.value
-      textColor.value = temp
-    }
-    
+      const temp = backgroundColor.value;
+      backgroundColor.value = textColor.value;
+      textColor.value = temp;
+    };
+
     const updateFromInput = (type) => {
       // Добавляем # если его нет
       if (type === 'background' && !backgroundColor.value.startsWith('#')) {
-        backgroundColor.value = '#' + backgroundColor.value
+        backgroundColor.value = '#' + backgroundColor.value.replace(/^#/, '');
       }
       if (type === 'text' && !textColor.value.startsWith('#')) {
-        textColor.value = '#' + textColor.value
+        textColor.value = '#' + textColor.value.replace(/^#/, '');
       }
-    }
-    
+    };
+
     const generateAccessibleText = () => {
-      const bgLum = backgroundLuminance.value
-      // Подбираем контрастный цвет
-      textColor.value = bgLum > 0.5 ? '#000000' : '#ffffff'
-    }
-    
+      const bgLum = backgroundLuminance.value;
+      textColor.value = bgLum > 0.5 ? '#000000' : '#ffffff';
+    };
+
     const generateAccessibleBg = () => {
-      const textLum = textLuminance.value
-      // Подбираем контрастный фон
-      backgroundColor.value = textLum > 0.5 ? '#000000' : '#ffffff'
-    }
-    
+      const textLum = textLuminance.value;
+      backgroundColor.value = textLum > 0.5 ? '#000000' : '#ffffff';
+    };
+
+    // ВАЖНО: Возвращаем все используемые в шаблоне переменные
     return {
       backgroundColor,
       textColor,
       activeBlindness,
       blindnessTypes,
       demoColors,
+      simulatedDemoColors,
+      simulatedBackgroundColor,
+      simulatedTextColor,
+      activeBlindnessName,
       contrastRatio,
       backgroundLuminance,
       textLuminance,
@@ -261,12 +363,13 @@ export default {
       updateFromInput,
       generateAccessibleText,
       generateAccessibleBg
-    }
+    };
   }
-}
+};
 </script>
 
 <style scoped>
+/* Стили остаются без изменений, как в вашем исходном коде */
 .analyzer-view {
   display: flex;
   flex-direction: column;
@@ -566,15 +669,15 @@ export default {
   .analyzer-grid {
     grid-template-columns: 1fr;
   }
-  
+
   .color-inputs {
     grid-template-columns: 1fr;
   }
-  
+
   .contrast-results {
     grid-template-columns: 1fr;
   }
-  
+
   .tool-buttons {
     grid-template-columns: 1fr;
   }
