@@ -9,6 +9,7 @@ export default defineConfig({
     vue(),
     vueDevTools(),
   ],
+  base: 'study-frontend_and_backend-5-control-work',
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url))
